@@ -1,0 +1,17 @@
+syntax = "proto3";
+package paxos;
+option go_package = "main";
+
+message Message {
+  enum MessageType {
+    PROPOSE = 0;
+    PREPARE = 1;
+    PROMISE = 2;
+    ACCEPT = 3;
+  }
+
+  MessageType messageType = 1;
+  int32 sender = 2;
+  int32 id = 3;
+  int32 value = 4;
+}
