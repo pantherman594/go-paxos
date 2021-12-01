@@ -1,24 +1,25 @@
 package main
 
 import (
-  "fmt"
+	"fmt"
 )
 
 type Learner struct {
-  NodeBase
+	NodeBase
 }
+
 var _ = Node(&Learner{})
 
 func (l *Learner) Init() {
-  l.NodeBase.Init()
-  go l.readMessages()
+	l.NodeBase.Init()
+	go l.readMessages()
 }
 
 func (l *Learner) readMessages() {
-  for message := range l.in {
-    switch(message.MessageType) {
-    case ACCEPT:
-      fmt.Println("Accepted", message.Value)
-    }
-  }
+	for message := range l.in {
+		switch message.MessageType {
+		case ACCEPT:
+			fmt.Println("Accepted", message.Value)
+		}
+	}
 }
