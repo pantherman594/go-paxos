@@ -12,21 +12,16 @@ type Acceptor struct {
 var _ = Node(&Acceptor{})
 
 func (a *Acceptor) Init() {
+  a.max_id = -1
   a.NodeBase.Init()
   go a.readMessages()
 }
 
 func (a *Acceptor) readMessages() {
-  for m := range a.in {
-    var message Message
-    err := message.Unmarshal(m)
-    if err != nil {
-      fmt.Println(err)
-      continue
-    }
-
+  for message := range a.in {
     switch(message.MessageType) {
     case PREPARE:
+      fmt.Println("RECEIVE PREPARE")
       if message.Id > a.max_id {
         a.max_id = message.Id
         go a.promise(message)
@@ -44,24 +39,19 @@ func (a *Acceptor) promise(message Message) {
   message.MessageType = PROMISE
   message.Sender = 0
 
-  for _, p := range a.network.Proposers {
-    if p.name != recipient {
-      continue
-    }
-
-    fmt.Println("a to p")
-    p.Send(message)
-    break
-  }
+  fmt.Println("a to p promise")
+  a.SendExternal(a.network.Nodes[recipient].address, message)
 }
 
 func (a *Acceptor) accept(id int32, value int32) {
-  for _, l := range a.network.Learners {
-    fmt.Println("a to l")
-    l.Send(Message{
-      MessageType: ACCEPT,
-      Id: id,
-      Value: value,
-    })
+  message := Message{
+    MessageType: ACCEPT,
+    Id: id,
+    Value: value,
+  }
+
+  for id := range a.network.Learners {
+    fmt.Println("a to l accept")
+    a.SendExternal(a.network.Nodes[id].address, message)
   }
 }

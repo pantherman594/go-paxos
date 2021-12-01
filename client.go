@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "time"
 )
 
 type Client struct {
@@ -12,6 +13,11 @@ var _ = Node(&Client{})
 func (c *Client) Init() {
   c.NodeBase.Init()
   go c.readMessages()
+  go func() {
+  time.Sleep(3  * time.Second)
+  fmt.Println("PROPOSE")
+  c.Propose(123)
+  }()
 }
 
 func (c *Client) readMessages() {
@@ -21,11 +27,13 @@ func (c *Client) readMessages() {
 }
 
 func (c *Client) Propose(value int32) {
-  for _, p := range c.network.Proposers {
+  message := Message{
+    MessageType: PROPOSE,
+    Value: value,
+  }
+
+  for id := range c.network.Proposers {
     fmt.Println("c to p")
-    p.Send(Message{
-      MessageType: PROPOSE,
-      Value: value,
-    })
+    c.SendExternal(c.network.Nodes[id].address, message)
   }
 }

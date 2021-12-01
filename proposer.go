@@ -27,14 +27,7 @@ func (p *Proposer) Init() {
 }
 
 func (p *Proposer) readMessages() {
-  for m := range p.in {
-    var message Message
-    err := message.Unmarshal(m)
-    if err != nil {
-      fmt.Println(err)
-      continue
-    }
-
+  for message := range p.in {
     switch(message.MessageType) {
     case PROPOSE:
       id := p.next_id
@@ -53,14 +46,16 @@ func (p *Proposer) readMessages() {
 }
 
 func (p *Proposer) prepare(id int32, value int32) {
-  for _, a := range p.network.Acceptors {
+  message :=Message{
+    MessageType: PREPARE,
+    Sender: p.name,
+    Id: id,
+    Value: value,
+  } 
+
+  for id := range p.network.Acceptors {
     fmt.Println("p to a prepare")
-    a.Send(Message{
-      MessageType: PREPARE,
-      Sender: p.name,
-      Id: id,
-      Value: value,
-    })
+    p.SendExternal(p.network.Nodes[id].address, message)
   }
 }
 
@@ -77,13 +72,15 @@ func (p *Proposer) receivePromise(message Message) {
 }
 
 func (p *Proposer) propose(id int32, value int32) {
-  for _, a := range p.network.Acceptors {
+  message :=Message{
+    MessageType: PROPOSE,
+    Sender: p.name,
+    Id: id,
+    Value: value,
+  } 
+
+  for id := range p.network.Acceptors {
     fmt.Println("p to a propose")
-    a.Send(Message{
-      MessageType: PROPOSE,
-      Sender: p.name,
-      Id: id,
-      Value: value,
-    })
+    p.SendExternal(p.network.Nodes[id].address, message)
   }
 }

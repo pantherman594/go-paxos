@@ -15,18 +15,10 @@ func (l *Learner) Init() {
 }
 
 func (l *Learner) readMessages() {
-  for m := range l.in {
-    var message Message
-    err := message.Unmarshal(m)
-    if err != nil {
-      fmt.Println(err)
-      continue
-    }
-
+  for message := range l.in {
     switch(message.MessageType) {
     case ACCEPT:
       fmt.Println("Accepted", message.Value)
-      l.network.Close()
     }
   }
 }

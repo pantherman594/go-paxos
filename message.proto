@@ -8,10 +8,23 @@ message Message {
     PREPARE = 1;
     PROMISE = 2;
     ACCEPT = 3;
+    ADD_NODE = 4;
+    DONE = 5;
+  }
+
+  enum NodeType {
+    CLIENT = 0;
+    PROPOSER = 1;
+    ACCEPTOR = 2;
+    LEARNER = 4;
   }
 
   MessageType messageType = 1;
   int32 sender = 2;
   int32 id = 3;
   int32 value = 4;
+
+  NodeType nodeType = 5;
+  string address = 6;
+
 }

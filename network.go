@@ -2,114 +2,164 @@ package main
 
 import (
   "net"
+  "fmt"
   "sync"
 )
 
+type NodeInfo struct {
+  id int32
+  address string
+  nodeType Message_NodeType
+}
+
 type Network struct {
-  Clients []*Client
-  Proposers []*Proposer
-  Acceptors []*Acceptor
-  Learners []*Learner
+  id int32
+
+  Nodes map[int32]NodeInfo
+  Clients map[int32]struct{}
+  Proposers map[int32]struct{}
+  Acceptors map[int32]struct{}
+  Learners map[int32]struct{}
 
   conn *net.Conn
+  current Node
 
   close_lock sync.Mutex
   closed bool
   done chan struct{}
 }
 
-func (n *Network) Init() {
+func (n *Network) Run(listener net.Listener) {
   n.closed = false
   n.done = make(chan struct{})
-  for i := 0; i < 1; i++ {
-    c := &Client{
-      NodeBase: NodeBase{ network: n },
+
+  for {
+    conn, err := listener.Accept()
+    if err != nil {
+      continue
     }
 
-    n.Clients = append(n.Clients, c)
-    c.Init()
-  }
-
-  for i := 0; i < 1; i++ {
-    p := &Proposer{
-      NodeBase: NodeBase{ network: n },
-      name: 0,
-      next_id: 0,
-    }
-
-    n.Proposers = append(n.Proposers, p)
-    p.Init()
-  }
-
-  for i := 1; i < 4; i++ {
-    a := &Acceptor{
-      NodeBase: NodeBase{ network: n },
-      max_id: -1,
-    }
-
-    n.Acceptors = append(n.Acceptors, a)
-    a.Init()
-  }
-
-  for i := 0; i < 1; i++ {
-    l := &Learner{
-      NodeBase: NodeBase{ network: n },
-    }
-
-    n.Learners = append(n.Learners, l)
-    l.Init()
+    fmt.Println(conn.RemoteAddr().String())
+    go n.handleNode(conn)
   }
 }
 
-func (n *Network) Wait() {
-  _, _ = <- n.done
-}
+func (net *Network) handleNode(conn net.Conn) {
+  defer conn.Close()
 
-func (n *Network) Close() {
-  n.close_lock.Lock()
-  defer n.close_lock.Unlock()
-
-  if n.closed {
+  var buf [512]byte
+  n, err := conn.Read(buf[:])
+  if err != nil {
+    fmt.Println(err)
     return
   }
 
-  for _, p := range n.Proposers {
-    close(p.in)
-  }
-  for _, a := range n.Acceptors {
-    close(a.in)
-  }
-  for _, l := range n.Learners {
-    close(l.in)
+  net.current.Receive(buf[:n])
+}
+
+func (n *Network) AddNode(id int32, nodeType Message_NodeType, addr string) {
+  if id == n.id {
+    return
   }
 
-  close(n.done)
-  n.closed = true
+  if _, ok := n.Nodes[id]; ok {
+    return
+  }
+
+  n.Nodes[id] = NodeInfo{id, addr, nodeType}
+
+  switch (nodeType) {
+  case CLIENT:
+    n.Clients[id] = struct{}{}
+  case PROPOSER:
+    n.Proposers[id] = struct{}{}
+  case ACCEPTOR:
+    n.Acceptors[id] = struct{}{}
+  case LEARNER:
+    n.Learners[id] = struct{}{}
+  default:
+    panic("Invalid node type: " + nodeType.String())
+  }
+
+  addMessage := Message{
+    Sender: id,
+    MessageType: ADD_NODE,
+    NodeType: nodeType,
+    Address: addr,
+  }
+
+  for nodeId, nodeInfo := range n.Nodes {
+    n.current.SendExternal(nodeInfo.address, addMessage)
+
+    if n.id == 0 {
+      addNodeMessage := Message{
+        Sender: nodeId,
+        MessageType: ADD_NODE,
+        NodeType: nodeInfo.nodeType,
+        Address: nodeInfo.address,
+      }
+
+      n.current.SendExternal(addr, addNodeMessage)
+    }
+  }
 }
 
 type Node interface {
   Init()
-  Send(message Message) error
+  Receive(buffer []byte) error
+  SendExternal(recipient string, message Message) error
   readMessages()
 }
 
 type NodeBase struct {
   network *Network
-  conn *net.Conn
-  in chan []byte
+  in chan Message
 }
 
 func (n *NodeBase) Init() {
-  n.in = make(chan []byte, 10)
+  n.in = make(chan Message, 10)
 }
 
-func (n *NodeBase) Send(message Message) error {
-  b, err := message.Marshal()
+func (n *NodeBase) Receive(buf []byte) error {
+  var message Message
+  err := message.Unmarshal(buf)
   if err != nil {
     return err
   }
 
-  n.in <- b
+  switch(message.MessageType) {
+  case ADD_NODE:
+    n.network.AddNode(message.Sender, message.NodeType, message.Address)
+  default:
+    fmt.Println(message)
+    n.in <- message
+  }
+
+  return nil
+}
+
+func (n *NodeBase) SendExternal(recipient string, message Message) error {
+  fmt.Println("send", message, "to", recipient)
+  buf, err := message.Marshal()
+  if err != nil {
+    return err
+  }
+
+  fmt.Println(buf)
+
+  conn, err := net.Dial("tcp", recipient)
+  if err != nil {
+    return err
+  }
+
+  fmt.Println("conn")
+
+  _, err = conn.Write(buf)
+  if err != nil {
+    return err
+  }
+
+  fmt.Println("write")
 
   return nil
 }
